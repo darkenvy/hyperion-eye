@@ -115,17 +115,12 @@ def main():
     img = perspective_transform(img, [VECTOR_A, VECTOR_B, VECTOR_C, VECTOR_D])
 
     # ------------------------------- Show Image ------------------------------- #
-    final_img = numpy2pil(img)
-    final_b64 = base64.b64encode(final_img.tobytes())
-
-    command = TCP_BASE_IMG_CMD
-    command['imagedata'] = '%s' % final_b64
-    command = json.dumps(command) # convert to JSON
-    command = '%s\n' % command # append \n as terminator
-    command = str.encode(command) # convert to 'binary-like object' from string
-    sock.send(command)
-
+    cv2.imshow("Original", img) # show the frame
+    key = cv2.waitKey(1) & 0xFF
     rawCapture.truncate(0) # clear the stream in preparation for the next frame
+
+    if key == ord("q"): # if the `q` key was pressed, break from the loop
+      break
 
   s.close()
 

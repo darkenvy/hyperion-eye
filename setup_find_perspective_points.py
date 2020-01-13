@@ -10,32 +10,6 @@ import base64
 import json
 import socket
 
-# ------------------------------- Configuration ------------------------------- #
-
-# Replace the next 3 assignments to the results retrieved from fisheye_calibrate.py
-DIM=(2592, 1944)
-K=np.array([[1259.041938650184, 0.0, 1350.8011212450504],
-            [0.0, 1263.2227906651265, 896.9567943445292],
-            [0.0, 0.0, 1.0]])
-D=np.array([[-0.02553723406094832], [0.02138072637573416], [-0.11357946018325828], [0.10334136402735668]])
-
-TV_ASPECT_RATIO = 1.75
-
-# Find these points by running setup_find_perspective_points.py and using the mounse
-# to determine coordinates of the 4 corners of the tv
-VECTOR_A = [217,48] # Top-Left of Screen
-VECTOR_B = [443,40] # Top-Right of Screen
-VECTOR_C = [115,122] # Bottom-Left of Screen
-VECTOR_D = [572,116] # Bottom-Right of Screen
-
-# Refer to https://picamera.readthedocs.io/en/release-1.12/fov.html and set your
-# resolution to the highest FoV (field of fiew). Pixels dont matter; its the FoV.
-# The final image sent to hyperion is less than 100x80 anyways.
-# The provided numers are for the v1 pi camera
-RESOLUTION = (1296, 972) # Set to your 
-FRAME_RATE = 20 # default: 20. Decrease if having latency issues
-
-# -------------------------------- Source Code -------------------------------- #
 
 def unfisheye(cv2_img, balance=0.0, dim2=None, dim3=None):
     img = cv2_img
@@ -97,6 +71,7 @@ def numpy2pil(np_array: np.ndarray) -> Image:
     img = Image.fromarray(np_array, 'RGB')
     return img
 
+
 def main():
   # capture frames from the camera
   for frame in camera.capture_continuous(rawCapture, format="bgr", use_video_port=True):
@@ -114,43 +89,22 @@ def main():
     # -------------------------- Perspective Transform -------------------------- #
     img = perspective_transform(img, [VECTOR_A, VECTOR_B, VECTOR_C, VECTOR_D])
 
+    # ----------------------------- Reference Draw ----------------------------- #
+    draw_vector_points_for_reference(img)
+
     # ------------------------------- Show Image ------------------------------- #
-    final_img = numpy2pil(img)
-    final_b64 = base64.b64encode(final_img.tobytes())
-
-    command = TCP_BASE_IMG_CMD
-    command['imagedata'] = '%s' % final_b64
-    command = json.dumps(command) # convert to JSON
-    command = '%s\n' % command # append \n as terminator
-    command = str.encode(command) # convert to 'binary-like object' from string
-    sock.send(command)
-
+    cv2.imshow("Original", img) # show the frame
+    key = cv2.waitKey(1) & 0xFF
     rawCapture.truncate(0) # clear the stream in preparation for the next frame
+
+    if key == ord("q"): # if the `q` key was pressed, break from the loop
+      break
 
   s.close()
 
 assert float(cv2.__version__.rsplit('.', 1)[0]) >= 3, 'OpenCV version 3 or newer required.'
 
-# initialize the camera and grab a reference to the raw camera capture
-HOST = socket.gethostname()
-PORT = 19444
-SENSOR_MODE = 4
-TV_WIDTH = 500
-TV_HEIGHT = int(TV_WIDTH / TV_ASPECT_RATIO)
-TCP_BASE_IMG_CMD = {
-  "command":"image",
-  "imagewidth": TV_WIDTH,
-  "imageheight": TV_HEIGHT,
-  "priority":500,
-}
-
-camera = PiCamera(0, 'none', False, RESOLUTION, FRAME_RATE, SENSOR_MODE)
-camera.exposure_mode = 'night'
-
-# Connect to hyperiond JSON server
-sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-sock.connect((HOST, PORT))
-
+camera = PiCamera(0, 'none', False, RESOLUTION, FRAME_RATE)
 rawCapture = PiRGBArray(camera, size=camera.resolution)
 time.sleep(0.1) # allow the camera to warmup
 main()
